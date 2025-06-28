@@ -1,0 +1,27 @@
+{
+  "name": "vlrggapi",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "concurrently \"tsc -w\" \"nodemon dist/index.js\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JMC50/vlrggapi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/JMC50/vlrggapi/issues"
+  },
+  "homepage": "https://github.com/JMC50/vlrggapi#readme",
+  "description": "",
+  "dependencies": {
+    "@types/express": "^5.0.3",
+    "@types/puppeteer": "^5.4.7",
+    "express": "^5.1.0",
+    "puppeteer": "^24.11.1"
+  }
+}
