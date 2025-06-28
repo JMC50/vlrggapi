@@ -1,6 +1,6 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
 
-interface MatchItem {
+export interface MatchItem {
     href: string;
     match_id: string;
     team1: string;
@@ -11,7 +11,7 @@ interface MatchItem {
     status: string;
 }
 
-async function get_upcomings(event_id: number, event_name: string): Promise<MatchItem[]> {
+export async function get_eventMatches(event_id: number, event_name: string): Promise<MatchItem[]> {
     let browser: Browser | null = null;
     
     try{
@@ -143,5 +143,3 @@ async function autoScroll(page: Page): Promise<void> {
     // 스크롤 후 잠시 대기하여 동적 콘텐츠 로딩
     await new Promise(resolve => setTimeout(resolve, 2000));
 }
-
-export { get_upcomings, MatchItem };
