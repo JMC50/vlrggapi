@@ -97,7 +97,7 @@ interface MatchItem {
 
 ## API 참조
 
-### `get_upcomings(event_id: number, event_name: string): Promise<MatchItem[]>`
+### `get_eventMatches(event_id: number, event_name: string): Promise<MatchItem[]>`
 
 지정된 이벤트의 모든 매치 정보를 크롤링합니다.
 
