@@ -2,304 +2,146 @@ import puppeteer, { Browser, Page } from 'puppeteer';
 
 interface MatchItem {
     href: string;
-    text: string;
-    matchInfo: string;
-    teams?: string[];
-    score?: string;
-    time?: string;
-    status?: string;
-    eventName?: string;
+    match_id: string;
+    team1: string;
+    team2: string;
+    upcomingTime: string;
+    eventSeries: string;
+    eventName: string;
+    status: string;
 }
 
 async function get_upcomings(event_id: number, event_name: string): Promise<MatchItem[]> {
-    const url = `https://www.vlr.gg/event/matches/${event_id}/${event_name}/?series_id=all&group=all`;
-    
     let browser: Browser | null = null;
     
-    try {
-        console.log('Starting browser...');
-        
-        // Puppeteer가 자체적으로 Chrome을 다운로드하도록 설정
-        const launchOptions: any = {
+    try{
+        browser = await puppeteer.launch({
             headless: true,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--disable-gpu',
-                '--disable-web-security',
-                '--disable-features=VizDisplayCompositor',
-                '--disable-extensions',
-                '--disable-plugins',
-                '--disable-images',
-                '--disable-javascript',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding'
-            ]
-        };
-        
-        // WSL 환경에서 Chrome 실행 파일 경로 설정 (snap 제외)
-        const possibleChromePaths = [
-            '/usr/bin/google-chrome',
-            '/usr/bin/google-chrome-stable',
-            '/usr/bin/chromium',
-            '/usr/bin/microsoft-edge',
-            '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
-            '/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe'
-        ];
-        
-        for (const chromePath of possibleChromePaths) {
-            try {
-                const fs = require('fs');
-                if (fs.existsSync(chromePath)) {
-                    console.log(`Found Chrome at: ${chromePath}`);
-                    launchOptions.executablePath = chromePath;
-                    break;
-                }
-            } catch (error) {
-                // 파일 존재 확인 실패 시 다음 경로 시도
-                continue;
-            }
-        }
-        
-        // Chrome을 찾지 못한 경우 Puppeteer가 자체적으로 다운로드하도록 함
-        if (!launchOptions.executablePath) {
-            console.log('Chrome not found in common paths, Puppeteer will download Chrome automatically...');
-        }
-        
-        browser = await puppeteer.launch(launchOptions);
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
         
         const page = await browser.newPage();
         
-        // User-Agent 설정
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        // 브라우저 콘솔 로그를 Node.js 콘솔로 전달
+        // page.on('console', msg => console.log('브라우저 로그:', msg.text()));
         
-        // 뷰포트 설정
-        await page.setViewport({ width: 1920, height: 1080 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+        const url = `https://www.vlr.gg/event/matches/${event_id}/${event_name}/?series_id=all&group=all`;
         
-        console.log('Navigating to page...');
+        console.log(`크롤링 시작: ${url}`);
+        
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+        await autoScroll(page);
         
-        // 페이지 로딩 대기
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        console.log('매치 아이템 추출 시작...');
         
-        // 스크롤을 통해 모든 콘텐츠 로딩
-        console.log('Scrolling to load all content...');
-        await scrollToBottom(page);
+        const matchItems = await page.evaluate(() => {
+            const eventName = document.querySelector(`h1.wf-title`)?.textContent?.trim() || '';
+
+            const elements = document.querySelectorAll('a.wf-module-item.match-item');
+            console.log(`총 ${elements.length}개의 매치 요소를 찾았습니다.`);
+            const items: MatchItem[] = [];
+            
+            elements.forEach((element, index) => {
+                const href = element.getAttribute('href') || '';
+                
+                // match_id 추출 (href에서 첫 번째 숫자)
+                let match_id = '';
+                if (href) {
+                    const match = href.match(/\/(\d+)\//);
+                    match_id = match ? match[1] : '';
+                }
+                
+                // 팀 정보 추출
+                const teamElements = element.querySelectorAll('.match-item-vs-team-name');
+                const team1 = teamElements[0]?.textContent?.trim() || '';
+                const team2 = teamElements[1]?.textContent?.trim() || '';
+                
+                // upcoming 시간 추출 (정확한 선택자 사용)
+                let upcomingTime = '';
+                let status = '';
+                
+                // match-item-eta > ml > ml-eta
+                const etaElement = element.querySelector('.match-item-eta');
+                if(etaElement){
+                    const mlElement = etaElement.querySelector('.ml');
+                    if(mlElement){
+                        const mlEtaElement = mlElement.querySelector('.ml-eta');
+                        const mlStatusElement = mlElement.querySelector('.ml-status');
+                        
+                        upcomingTime = mlEtaElement?.textContent?.trim() || '';
+                        status = mlStatusElement?.textContent?.trim() || '';
+                    }
+                }
+                
+                // 이벤트 시리즈 추출 (match-item-event text-of) - \t 제거
+                const eventElement = element.querySelector('.match-item-event.text-of');
+                let eventSeries = eventElement?.textContent?.trim() || '';
+                
+                // \t로 분리하고 순서를 바꿔서 콜론 추가
+                if(eventSeries.includes('\t')){
+                    const parts = eventSeries.split('\t').filter(part => part.trim() !== '');
+                    if(parts.length >= 2){
+                        eventSeries = `${parts[1].trim()}: ${parts[0].trim()}`;
+                    }else if(parts.length === 1){
+                        eventSeries = parts[0].trim();
+                    }
+                }else{
+                    eventSeries = eventSeries.replace(/\s+/g, ' ').trim();
+                }
+                
+                // console.log(`매치 ${index + 1}: ${team1} vs ${team2}, 이벤트: ${eventSeries}, 상태: ${status}, 시간: ${upcomingTime}`);
+            
+                items.push({ 
+                    href, 
+                    match_id,
+                    team1, 
+                    team2, 
+                    upcomingTime, 
+                    eventSeries,
+                    eventName,
+                    status
+                });
+            });
+            
+            return items;
+        });
         
-        // 매치 아이템들 추출
-        console.log('Extracting match items...');
-        const matchItems = await extractMatchItems(page);
-        
+        console.log(`총 ${matchItems.length}개의 매치를 찾았습니다.`);
         return matchItems;
-        
-    } catch (error) {
-        console.error('Error scraping matches:', error);
-        
-        // Chrome 설치 안내
-        if (error instanceof Error && error.message.includes('Could not find Chrome')) {
-            console.log('\nChrome installation required. Please run one of the following:');
-            console.log('1. sudo apt update && sudo apt install -y google-chrome-stable');
-            console.log('2. sudo apt update && sudo apt install -y chromium-browser');
-            console.log('3. Or install Chrome manually from https://www.google.com/chrome/');
-        }
-        
-        return [];
-    } finally {
-        if (browser) {
+
+    }catch(error){
+        console.error('크롤링 중 오류 발생:', error);
+        throw error;
+    }finally{
+        if(browser){
             await browser.close();
         }
     }
 }
 
-async function scrollToBottom(page: Page): Promise<void> {
-    let previousHeight = 0;
-    let currentHeight = await page.evaluate(() => document.body.scrollHeight);
-    let scrollAttempts = 0;
-    const maxScrollAttempts = 10;
-    
-    while (previousHeight !== currentHeight && scrollAttempts < maxScrollAttempts) {
-        previousHeight = currentHeight;
-        
-        // 페이지 끝까지 스크롤
-        await page.evaluate(() => {
-            window.scrollTo(0, document.body.scrollHeight);
-        });
-        
-        // 새로운 콘텐츠 로딩 대기
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // 네트워크 요청 완료 대기
-        await page.waitForFunction(() => {
-            return !document.querySelector('.loading') && 
-                   !document.querySelector('[class*="loading"]');
-        }, { timeout: 5000 }).catch(() => {
-            // 로딩 요소가 없으면 계속 진행
-        });
-        
-        currentHeight = await page.evaluate(() => document.body.scrollHeight);
-        scrollAttempts++;
-        
-        console.log(`Scroll attempt ${scrollAttempts}: ${previousHeight} -> ${currentHeight}`);
-    }
-    
-    // 마지막으로 페이지 상단으로 스크롤
+// 자동 스크롤 함수
+async function autoScroll(page: Page): Promise<void> {
     await page.evaluate(() => {
-        window.scrollTo(0, 0);
-    });
-    
-    await new Promise(resolve => setTimeout(resolve, 1000));
-}
-
-async function extractMatchItems(page: Page): Promise<MatchItem[]> {
-    const matchItems = await page.evaluate(() => {
-        const items: MatchItem[] = [];
-        
-        // wf-module-item match-item 클래스를 가진 a 태그들 찾기
-        const matchLinks = document.querySelectorAll('a.wf-module-item.match-item');
-        
-        matchLinks.forEach((link) => {
-            const href = (link as HTMLAnchorElement).href;
-            const text = link.textContent?.trim() || '';
-            
-            // 매치 정보 추출
-            const matchInfo = extractMatchInfoFromElement(link);
-            const teams = extractTeamsFromElement(link);
-            const score = extractScoreFromElement(link);
-            const time = extractTimeFromElement(link);
-            const status = extractStatusFromElement(link);
-            const eventName = extractEventNameFromElement(link);
-            
-            items.push({
-                href,
-                text,
-                matchInfo,
-                teams,
-                score,
-                time,
-                status,
-                eventName
-            });
-        });
-        
-        return items;
-    });
-    
-    return matchItems;
-}
-
-function extractMatchInfoFromElement(element: Element): string {
-    const matchInfoElement = element.querySelector('.match-item, .wf-module-header');
-    return matchInfoElement?.textContent?.trim() || '';
-}
-
-function extractTeamsFromElement(element: Element): string[] {
-    const teams: string[] = [];
-    
-    // 팀명을 찾는 다양한 선택자들
-    const teamSelectors = [
-        '.team',
-        '.wf-title',
-        '[class*="team"]',
-        '.match-item-team'
-    ];
-    
-    teamSelectors.forEach(selector => {
-        const teamElements = element.querySelectorAll(selector);
-        teamElements.forEach(teamEl => {
-            const teamName = teamEl.textContent?.trim();
-            if (teamName && teamName.length > 1 && !teams.includes(teamName)) {
-                teams.push(teamName);
-            }
+        return new Promise<void>((resolve) => {
+            let totalHeight = 0;
+            const distance = 100;
+            const timer = setInterval(() => {
+                const scrollHeight = document.body.scrollHeight;
+                window.scrollBy(0, distance);
+                totalHeight += distance;
+                
+                // 스크롤이 끝에 도달했거나 충분히 스크롤했으면 중단
+                if(totalHeight >= scrollHeight || totalHeight > 10000){
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 100);
         });
     });
     
-    return teams;
+    // 스크롤 후 잠시 대기하여 동적 콘텐츠 로딩
+    await new Promise(resolve => setTimeout(resolve, 2000));
 }
 
-function extractScoreFromElement(element: Element): string {
-    const scoreSelectors = [
-        '.score',
-        '.wf-module-header',
-        '[class*="score"]',
-        '.match-item-score'
-    ];
-    
-    for (const selector of scoreSelectors) {
-        const scoreElement = element.querySelector(selector);
-        if (scoreElement) {
-            const score = scoreElement.textContent?.trim();
-            if (score && /[\d-]/.test(score)) {
-                return score;
-            }
-        }
-    }
-    
-    return '';
-}
-
-function extractTimeFromElement(element: Element): string {
-    const timeSelectors = [
-        '.time',
-        '.wf-module-subheader',
-        '[class*="time"]',
-        '.match-item-time'
-    ];
-    
-    for (const selector of timeSelectors) {
-        const timeElement = element.querySelector(selector);
-        if (timeElement) {
-            const time = timeElement.textContent?.trim();
-            if (time && (time.includes(':') || time.includes('AM') || time.includes('PM'))) {
-                return time;
-            }
-        }
-    }
-    
-    return '';
-}
-
-function extractStatusFromElement(element: Element): string {
-    const statusSelectors = [
-        '.status',
-        '.wf-module-subheader',
-        '[class*="status"]',
-        '.match-item-status'
-    ];
-    
-    for (const selector of statusSelectors) {
-        const statusElement = element.querySelector(selector);
-        if (statusElement) {
-            const status = statusElement.textContent?.trim();
-            if (status && (status.includes('Live') || status.includes('Upcoming') || status.includes('Completed'))) {
-                return status;
-            }
-        }
-    }
-    
-    return '';
-}
-
-function extractEventNameFromElement(element: Element): string {
-    const eventSelectors = [
-        '.event',
-        '[class*="event"]',
-        '.match-item-event'
-    ];
-    
-    for (const selector of eventSelectors) {
-        const eventElement = element.querySelector(selector);
-        if (eventElement) {
-            return eventElement.textContent?.trim() || '';
-        }
-    }
-    
-    return '';
-}
-
-// 함수를 export
 export { get_upcomings, MatchItem };

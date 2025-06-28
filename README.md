@@ -1,14 +1,13 @@
-# VLR.gg API
+# VLR.gg API Scraper
 
-VLR.gg 웹사이트에서 Valorant 이벤트 매치 정보를 스크래핑하는 TypeScript 라이브러리입니다. Puppeteer를 사용하여 동적 콘텐츠와 스크롤 기능을 완벽하게 지원합니다.
+VLR.gg 사이트에서 이벤트 매치 정보를 크롤링하는 TypeScript 라이브러리입니다.
 
 ## 기능
 
-- VLR.gg 이벤트 페이지에서 매치 정보 스크래핑
-- Puppeteer를 사용한 실제 브라우저 시뮬레이션
-- 자동 스크롤을 통한 모든 페이지 콘텐츠 로딩
-- 팀명, 스코어, 시간, 상태 등 상세 정보 추출
-- JavaScript로 로딩되는 동적 콘텐츠 지원
+- VLR.gg 이벤트 페이지에서 매치 정보 자동 크롤링
+- 자동 스크롤을 통한 모든 매치 데이터 수집
+- 매치별 상세 정보 추출 (팀명, 시간, 상태, 이벤트 정보 등)
+- TypeScript 지원
 
 ## 설치
 
@@ -16,93 +15,117 @@ VLR.gg 웹사이트에서 Valorant 이벤트 매치 정보를 스크래핑하는
 npm install
 ```
 
-## 의존성
-
-- **Puppeteer**: 웹 브라우저 자동화 및 스크래핑
-- **@types/puppeteer**: TypeScript 타입 정의
-- **Express**: 웹 서버 (선택사항)
-
 ## 사용법
 
-### get_upcomings 함수
+### 기본 사용법
 
 ```typescript
 import { get_upcomings, MatchItem } from './src/module/scrapper';
 
-async function example() {
-    const eventId = 1234; // VLR.gg 이벤트 ID
-    const eventName = 'vct-champions-2024'; // 이벤트 이름 (URL 슬러그)
+async function main() {
+  try {
+    // event_id와 event_name을 지정하여 매치 정보 크롤링
+    const matches = await get_upcomings(2500, 'vct-2025-pacific-stage-2');
     
-    console.log('Starting scraping...');
-    const matches = await get_upcomings(eventId, eventName);
+    console.log(`총 ${matches.length}개의 매치를 찾았습니다.`);
     
-    console.log(`Found ${matches.length} matches`);
-    
-    matches.forEach(match => {
-        console.log(`Match: ${match.teams?.join(' vs ')}`);
-        console.log(`Score: ${match.score}`);
-        console.log(`Time: ${match.time}`);
-        console.log(`Status: ${match.status}`);
-        console.log(`URL: ${match.href}`);
+    matches.forEach((match, index) => {
+      console.log(`매치 ${index + 1}:`);
+      console.log(`  ID: ${match.match_id}`);
+      console.log(`  팀: ${match.team1} vs ${match.team2}`);
+      console.log(`  상태: ${match.status}`);
+      console.log(`  시간: ${match.upcomingTime}`);
+      console.log(`  이벤트: ${match.eventSeries}`);
+      console.log(`  링크: ${match.href}`);
+      console.log('---');
     });
+  } catch (error) {
+    console.error('크롤링 중 오류 발생:', error);
+  }
 }
+
+main();
 ```
 
-### MatchItem 인터페이스
+### 반환 데이터 구조
 
 ```typescript
 interface MatchItem {
-    href: string;           // 매치 상세 페이지 URL
-    text: string;           // 매치 텍스트 정보
-    matchInfo: string;      // 매치 기본 정보
-    teams?: string[];       // 참가 팀명 배열
-    score?: string;         // 스코어 정보
-    time?: string;          // 매치 시간
-    status?: string;        // 매치 상태 (Live, Upcoming, Completed 등)
-    eventName?: string;     // 이벤트명
+  href: string;           // 매치 링크
+  match_id: string;       // 매치 고유 ID
+  team1: string;          // 첫 번째 팀명
+  team2: string;          // 두 번째 팀명
+  upcomingTime: string;   // 매치 예정 시간 (예: "2h 30m")
+  eventSeries: string;    // 이벤트 시리즈 (예: "Week 1: Group Stage")
+  eventName: string;      // 이벤트 이름
+  status: string;         // 매치 상태 (예: "Live", "Upcoming", "Completed")
 }
 ```
 
-## 테스트
+### 예시 출력
 
-```bash
-# TypeScript 컴파일
-npx tsc
-
-# 테스트 실행
-node dist/test_scrapper.js
+```typescript
+[
+  {
+    href: "/508815/boom-esports-vs-talon-vct-2025-pacific-stage-2-w1",
+    match_id: "508815",
+    team1: "Boom Esports",
+    team2: "Talon",
+    upcomingTime: "2h 30m",
+    eventSeries: "Week 1: Group Stage",
+    eventName: "VCT 2025 Pacific Stage 2",
+    status: "Live"
+  },
+  {
+    href: "/508816/nrg-vs-cloud9-vct-2025-pacific-stage-2-w1",
+    match_id: "508816",
+    team1: "NRG",
+    team2: "Cloud9",
+    upcomingTime: "1d 5h",
+    eventSeries: "Week 1: Group Stage",
+    eventName: "VCT 2025 Pacific Stage 2",
+    status: "Upcoming"
+  }
+]
 ```
 
-## 주요 개선사항 (Puppeteer 버전)
+## API 참조
 
-1. **실제 브라우저 시뮬레이션**: Puppeteer를 사용하여 실제 Chrome 브라우저처럼 동작
-2. **동적 콘텐츠 지원**: JavaScript로 로딩되는 콘텐츠를 완벽하게 처리
-3. **자동 스크롤**: 페이지 끝까지 스크롤하여 모든 매치 정보를 로딩
-4. **정확한 데이터 추출**: DOM 쿼리 선택자를 사용하여 더 정확한 정보 추출
-5. **로딩 상태 감지**: 페이지 로딩 완료를 기다려 안정적인 스크래핑
+### `get_upcomings(event_id: number, event_name: string): Promise<MatchItem[]>`
 
-## 스크래핑 과정
+지정된 이벤트의 모든 매치 정보를 크롤링합니다.
 
-1. **브라우저 시작**: Headless Chrome 브라우저를 시작
-2. **페이지 로딩**: VLR.gg 이벤트 페이지로 이동
-3. **스크롤 처리**: 페이지 끝까지 스크롤하여 모든 콘텐츠 로딩
-4. **데이터 추출**: `a.wf-module-item.match-item` 클래스를 가진 요소들에서 정보 추출
-5. **브라우저 종료**: 작업 완료 후 브라우저 자동 종료
+#### 매개변수
+
+- `event_id` (number): VLR.gg 이벤트 ID
+- `event_name` (string): VLR.gg 이벤트 이름 (URL 슬러그)
+
+#### 반환값
+
+- `Promise<MatchItem[]>`: 매치 정보 배열
+
+#### 예외
+
+- 네트워크 오류
+- 페이지 로딩 실패
+- 크롤링 중 발생하는 기타 오류
+
+## 기술 스택
+
+- **TypeScript**: 타입 안전성 제공
+- **Puppeteer**: 브라우저 자동화 및 웹 크롤링
+- **Node.js**: 런타임 환경
 
 ## 주의사항
 
-1. **이벤트 ID와 이름**: VLR.gg 사이트에서 실제 이벤트의 ID와 URL 슬러그를 사용해야 합니다.
-2. **처리 시간**: Puppeteer를 사용하므로 HTTP 요청보다 처리 시간이 더 걸릴 수 있습니다.
-3. **메모리 사용량**: 브라우저 인스턴스를 사용하므로 메모리 사용량이 증가할 수 있습니다.
-4. **웹사이트 변경**: VLR.gg 사이트 구조가 변경될 경우 선택자를 업데이트해야 할 수 있습니다.
+1. **사용량 제한**: VLR.gg의 서버에 과도한 부하를 주지 않도록 적절한 간격을 두고 사용하세요.
+2. **웹사이트 변경**: VLR.gg의 HTML 구조가 변경될 경우 크롤링이 실패할 수 있습니다.
+3. **법적 고려사항**: 웹 크롤링 시 해당 웹사이트의 이용약관을 준수하세요.
 
-## 예시 URL 구조
+## 변경 이력
 
-VLR.gg 이벤트 URL: `https://www.vlr.gg/event/matches/{event_id}/{event_name}/?series_id=all&group=all`
-
-예시:
-- `https://www.vlr.gg/event/matches/1234/vct-champions-2024/?series_id=all&group=all`
-
-## 라이센스
-
-ISC 
+### v1.0.0
+- 초기 버전
+- VLR.gg 이벤트 매치 크롤링 기능
+- 자동 스크롤 지원
+- TypeScript 타입 정의 
