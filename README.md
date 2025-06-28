@@ -15,6 +15,12 @@ VLR.gg 사이트에서 이벤트 매치 정보를 크롤링하는 TypeScript 라
 npm install
 ```
 
+## 실행
+
+```bash
+npm start
+```
+
 ## 사용법
 
 ### 기본 사용법
