@@ -9,76 +9,54 @@ export interface MatchItem {
     eventSeries: string;
     eventName: string;
     status: string;
+    winner: "team1" | "team2" | undefined;
 }
 
-export async function get_eventMatches(event_id: number, event_name: string): Promise<MatchItem[]> {
+async function fetchAllMatches(event_id: number, event_name: string): Promise<MatchItem[]> {
     let browser: Browser | null = null;
-    
     try{
         browser = await puppeteer.launch({
             headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
-        
+
         const page = await browser.newPage();
-        
-        // 브라우저 콘솔 로그를 Node.js 콘솔로 전달
-        // page.on('console', msg => console.log('브라우저 로그:', msg.text()));
-        
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
         const url = `https://www.vlr.gg/event/matches/${event_id}/${event_name}/?series_id=all&group=all`;
-        
-        console.log(`크롤링 시작: ${url}`);
-        
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
         await autoScroll(page);
-        
-        console.log('매치 아이템 추출 시작...');
-        
+
         const matchItems = await page.evaluate(() => {
             const eventName = document.querySelector(`h1.wf-title`)?.textContent?.trim() || '';
-
             const elements = document.querySelectorAll('a.wf-module-item.match-item');
-            console.log(`총 ${elements.length}개의 매치 요소를 찾았습니다.`);
             const items: MatchItem[] = [];
-            
-            elements.forEach((element, index) => {
+            elements.forEach((element) => {
                 const href = element.getAttribute('href') || '';
-                
-                // match_id 추출 (href에서 첫 번째 숫자)
                 let match_id = '';
-                if (href) {
+                if(href){
                     const match = href.match(/\/(\d+)\//);
                     match_id = match ? match[1] : '';
                 }
-                
-                // 팀 정보 추출
                 const teamElements = element.querySelectorAll('.match-item-vs-team-name');
                 const team1 = teamElements[0]?.textContent?.trim() || '';
                 const team2 = teamElements[1]?.textContent?.trim() || '';
-                
-                // upcoming 시간 추출 (정확한 선택자 사용)
                 let upcomingTime = '';
                 let status = '';
-                
-                // match-item-eta > ml > ml-eta
                 const etaElement = element.querySelector('.match-item-eta');
+
                 if(etaElement){
                     const mlElement = etaElement.querySelector('.ml');
                     if(mlElement){
                         const mlEtaElement = mlElement.querySelector('.ml-eta');
                         const mlStatusElement = mlElement.querySelector('.ml-status');
-                        
                         upcomingTime = mlEtaElement?.textContent?.trim() || '';
                         status = mlStatusElement?.textContent?.trim() || '';
                     }
                 }
-                
-                // 이벤트 시리즈 추출 (match-item-event text-of) - \t 제거
+
                 const eventElement = element.querySelector('.match-item-event.text-of');
                 let eventSeries = eventElement?.textContent?.trim() || '';
-                
-                // \t로 분리하고 순서를 바꿔서 콜론 추가
+
                 if(eventSeries.includes('\t')){
                     const parts = eventSeries.split('\t').filter(part => part.trim() !== '');
                     if(parts.length >= 2){
@@ -89,9 +67,7 @@ export async function get_eventMatches(event_id: number, event_name: string): Pr
                 }else{
                     eventSeries = eventSeries.replace(/\s+/g, ' ').trim();
                 }
-                
-                // console.log(`매치 ${index + 1}: ${team1} vs ${team2}, 이벤트: ${eventSeries}, 상태: ${status}, 시간: ${upcomingTime}`);
-            
+
                 items.push({ 
                     href, 
                     match_id,
@@ -100,19 +76,113 @@ export async function get_eventMatches(event_id: number, event_name: string): Pr
                     upcomingTime, 
                     eventSeries,
                     eventName,
-                    status
+                    status,
+                    winner: undefined
                 });
             });
-            
             return items;
         });
-        
-        console.log(`총 ${matchItems.length}개의 매치를 찾았습니다.`);
         return matchItems;
+    }finally{
+        if(browser){
+            await browser.close();
+        }
+    }
+}
 
-    }catch(error){
-        console.error('크롤링 중 오류 발생:', error);
-        throw error;
+export async function get_upcomings(event_id: number, event_name: string): Promise<MatchItem[]> {
+    const all = await fetchAllMatches(event_id, event_name);
+    return all.filter(m => m.status.toLowerCase() === "upcoming");
+}
+
+export async function get_lives(event_id: number, event_name: string): Promise<MatchItem[]> {
+    const all = await fetchAllMatches(event_id, event_name);
+    return all.filter(m => m.status.toLowerCase() === "live");
+}
+
+export async function get_completes(event_id: number, event_name: string): Promise<MatchItem[]> {
+    let browser: Browser | null = null;
+    try{
+        browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+        const url = `https://www.vlr.gg/event/matches/${event_id}/${event_name}/?series_id=all&group=all`;
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+        await autoScroll(page);
+
+        const matchItems = await page.evaluate(() => {
+            const eventName = document.querySelector(`h1.wf-title`)?.textContent?.trim() || '';
+            const elements = document.querySelectorAll('a.wf-module-item.match-item');
+            const items: MatchItem[] = [];
+            elements.forEach((element) => {
+                const href = element.getAttribute('href') || '';
+                let match_id = '';
+                if(href){
+                    const match = href.match(/\/(\d+)\//);
+                    match_id = match ? match[1] : '';
+                }
+
+                const teamElements = element.querySelectorAll('.match-item-vs-team-name');
+                const team1 = teamElements[0]?.textContent?.trim() || '';
+                const team2 = teamElements[1]?.textContent?.trim() || '';
+                let upcomingTime = '';
+                let status = '';
+                const etaElement = element.querySelector('.match-item-eta');
+
+                if(etaElement){
+                    const mlElement = etaElement.querySelector('.ml');
+                    if(mlElement){
+                        const mlEtaElement = mlElement.querySelector('.ml-eta');
+                        const mlStatusElement = mlElement.querySelector('.ml-status');
+                        upcomingTime = mlEtaElement?.textContent?.trim() || '';
+                        status = mlStatusElement?.textContent?.trim() || '';
+                    }
+                }
+
+                const eventElement = element.querySelector('.match-item-event.text-of');
+                let eventSeries = eventElement?.textContent?.trim() || '';
+                if(eventSeries.includes('\t')){
+                    const parts = eventSeries.split('\t').filter(part => part.trim() !== '');
+                    if(parts.length >= 2){
+                        eventSeries = `${parts[1].trim()}: ${parts[0].trim()}`;
+                    }else if(parts.length === 1){
+                        eventSeries = parts[0].trim();
+                    }
+                }else{
+                    eventSeries = eventSeries.replace(/\s+/g, ' ').trim();
+                }
+
+                let winner: "team1" | "team2" | undefined = undefined;
+                if(status.toLowerCase() === "completed"){
+                    // team1, team2 영역에서 js-spoiler fa fa-caret-right 아이콘 위치 확인
+                    const team1Parent = teamElements[0]?.parentElement;
+                    const team2Parent = teamElements[1]?.parentElement;
+                    if(team1Parent && team1Parent.querySelector('i.js-spoiler.fa.fa-caret-right')) {
+                        winner = "team1";
+                    }else if(team2Parent && team2Parent.querySelector('i.js-spoiler.fa.fa-caret-right')) {
+                        winner = "team2";
+                    }
+                }
+
+                items.push({ 
+                    href, 
+                    match_id,
+                    team1, 
+                    team2, 
+                    upcomingTime, 
+                    eventSeries,
+                    eventName,
+                    status,
+                    winner
+                });
+            });
+            return items.filter(m => m.status.toLowerCase() === "completed");
+        });
+        return matchItems;
     }finally{
         if(browser){
             await browser.close();
