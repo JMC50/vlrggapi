@@ -5,7 +5,7 @@ export interface MatchItem {
     match_id: string;
     team1: string;
     team2: string;
-    upcomingTime: string;
+    upcomingTime: number; // 분 단위
     eventSeries: string;
     eventName: string;
     status: string;
@@ -33,6 +33,27 @@ export async function get_allMatches(event_id: number, event_name: string): Prom
         await autoScroll(page);
 
         const { upcomings, lives, completes } = await page.evaluate(() => {
+            function parseTimeToMinutes(timeStr: string): number {
+                if (!timeStr) return 0;
+                timeStr = timeStr.toLowerCase();
+                let total = 0;
+                const regex = /(?:(\d+)\s*mo)?\s*(?:(\d+)\s*w)?\s*(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?/;
+                const match = timeStr.match(regex);
+                if (match) {
+                    const months = parseInt(match[1] || '0', 10);
+                    const weeks = parseInt(match[2] || '0', 10);
+                    const days = parseInt(match[3] || '0', 10);
+                    const hours = parseInt(match[4] || '0', 10);
+                    const minutes = parseInt(match[5] || '0', 10);
+                    total += months * 30 * 24 * 60; // 1mo = 30d
+                    total += weeks * 7 * 24 * 60;
+                    total += days * 24 * 60;
+                    total += hours * 60;
+                    total += minutes;
+                }
+                return total;
+            }
+
             const eventName = document.querySelector(`h1.wf-title`)?.textContent?.trim() || '';
             const elements = document.querySelectorAll('a.wf-module-item.match-item');
             const upcomings: MatchItem[] = [];
@@ -49,7 +70,7 @@ export async function get_allMatches(event_id: number, event_name: string): Prom
                 const teamElements = element.querySelectorAll('.match-item-vs-team-name');
                 const team1 = teamElements[0]?.textContent?.trim() || '';
                 const team2 = teamElements[1]?.textContent?.trim() || '';
-                let upcomingTime = '';
+                let upcomingTimeStr = '';
                 let status = '';
                 const etaElement = element.querySelector('.match-item-eta');
 
@@ -58,7 +79,7 @@ export async function get_allMatches(event_id: number, event_name: string): Prom
                     if (mlElement) {
                         const mlEtaElement = mlElement.querySelector('.ml-eta');
                         const mlStatusElement = mlElement.querySelector('.ml-status');
-                        upcomingTime = mlEtaElement?.textContent?.trim() || '';
+                        upcomingTimeStr = mlEtaElement?.textContent?.trim() || '';
                         status = mlStatusElement?.textContent?.trim() || '';
                     }
                 }
@@ -79,7 +100,6 @@ export async function get_allMatches(event_id: number, event_name: string): Prom
 
                 let winner: "team1" | "team2" | undefined = undefined;
                 if (status.toLowerCase() === 'completed') {
-                    // team1, team2 영역에서 js-spoiler fa fa-caret-right 아이콘 위치 확인
                     const team1Parent = teamElements[0]?.parentElement;
                     const team2Parent = teamElements[1]?.parentElement;
                     if (team1Parent && team1Parent.querySelector('i.js-spoiler.fa.fa-caret-right')) {
@@ -87,6 +107,13 @@ export async function get_allMatches(event_id: number, event_name: string): Prom
                     } else if (team2Parent && team2Parent.querySelector('i.js-spoiler.fa.fa-caret-right')) {
                         winner = "team2";
                     }
+                }
+
+                let upcomingTime: number = 0;
+                if (status.toLowerCase() === 'live') {
+                    upcomingTime = 0;
+                } else {
+                    upcomingTime = parseTimeToMinutes(upcomingTimeStr);
                 }
 
                 const matchItem: MatchItem = {

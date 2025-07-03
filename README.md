@@ -53,13 +53,18 @@ export interface MatchItem {
   match_id: string;       // 매치 고유 ID
   team1: string;          // 첫 번째 팀명
   team2: string;          // 두 번째 팀명
-  upcomingTime: string;   // 매치 예정 시간 (예: "2h 30m")
+  upcomingTime: number;   // 매치까지 남은 시간(분 단위, status가 live면 0)
   eventSeries: string;    // 이벤트 시리즈 (예: "Week 1: Group Stage")
   eventName: string;      // 이벤트 이름
   status: string;         // 매치 상태 (예: "Live", "Upcoming", "Completed")
   winner: "team1" | "team2" | undefined; // 승리팀 (완료된 매치만, 나머지는 undefined)
 }
 ```
+
+### upcomingTime 필드 설명
+- 다양한 시간 포맷(예: `2w 3d`, `1mo`, `20h 27m`, `30m`)이 모두 **분(minute) 단위의 숫자**로 변환되어 반환됩니다.
+- status가 `live`인 경우 upcomingTime은 항상 0입니다.
+- 예시: `2w 3d` → 23760, `1mo` → 43200, `20h 27m` → 1227, `30m` → 30
 
 ### winner 필드 설명
 - **upcomings, lives**: 항상 `winner: undefined`로 반환됩니다.
@@ -76,7 +81,7 @@ export interface MatchItem {
       "match_id": "508816",
       "team1": "NRG",
       "team2": "Cloud9",
-      "upcomingTime": "1d 5h",
+      "upcomingTime": 1505,
       "eventSeries": "Week 1: Group Stage",
       "eventName": "VCT 2025 Pacific Stage 2",
       "status": "Upcoming",
@@ -84,7 +89,17 @@ export interface MatchItem {
     }
   ],
   "lives": [
-    // ... live matches
+    {
+      "href": "/508817/drx-vs-gen-g-vct-2025-pacific-stage-2-w1",
+      "match_id": "508817",
+      "team1": "DRX",
+      "team2": "Gen.G",
+      "upcomingTime": 0,
+      "eventSeries": "Week 1: Group Stage",
+      "eventName": "VCT 2025 Pacific Stage 2",
+      "status": "Live",
+      "winner": null
+    }
   ],
   "completes": [
     {
@@ -92,7 +107,7 @@ export interface MatchItem {
       "match_id": "508815",
       "team1": "Boom Esports",
       "team2": "Talon",
-      "upcomingTime": "2h 30m",
+      "upcomingTime": 0,
       "eventSeries": "Week 1: Group Stage",
       "eventName": "VCT 2025 Pacific Stage 2",
       "status": "Completed",
@@ -142,6 +157,8 @@ npm run dev
 버그 리포트나 기능 제안은 이슈를 통해 제출해주세요. 풀 리퀘스트도 환영합니다.
 
 ## 변경 이력
+### v1.3.0
+- upcomingTime이 string에서 number(분 단위)로 변경, 다양한 시간 포맷 지원
 ### v1.2.0
 - get_allMatches 함수가 모든 매치를 긁어오고 status별로 반환하도록 구조 변경
 - get_upcomings, get_lives, get_completes는 내부적으로 get_allMatches를 사용하도록 변경
