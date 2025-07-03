@@ -19,21 +19,17 @@ npm install
 
 ## 사용법
 
-### 기본 사용법
+### 모든 매치 한 번에 가져오기
 
 ```typescript
-import { get_upcomings, get_lives, get_completes, MatchItem } from './src/module/scrapper';
+import { get_allMatches, MatchItem, AllMatchesResult } from './src/module/scrapper';
 
 async function main() {
   const event_id = 2500;
   const event_name = 'vct-2025-pacific-stage-2';
 
-  // 예정된 매치만
-  const upcomings = await get_upcomings(event_id, event_name);
-  // 진행중 매치만
-  const lives = await get_lives(event_id, event_name);
-  // 완료된 매치만 (winner 정보 포함)
-  const completes = await get_completes(event_id, event_name);
+  // 모든 매치 한 번에 가져오기
+  const { upcomings, lives, completes } = await get_allMatches(event_id, event_name);
 
   console.log('Upcoming:', upcomings);
   console.log('Live:', lives);
@@ -43,9 +39,15 @@ async function main() {
 main();
 ```
 
-### 반환 데이터 구조
+### 반환 타입
 
 ```typescript
+export interface AllMatchesResult {
+  upcomings: MatchItem[];
+  lives: MatchItem[];
+  completes: MatchItem[];
+}
+
 export interface MatchItem {
   href: string;           // 매치 링크
   match_id: string;       // 매치 고유 ID
@@ -60,52 +62,51 @@ export interface MatchItem {
 ```
 
 ### winner 필드 설명
-- **get_upcomings, get_lives**: 항상 `winner: undefined`로 반환됩니다.
-- **get_completes**: status가 Completed인 매치만 반환하며, 승리팀이 team1이면 `winner: "team1"`, team2면 `winner: "team2"`로 반환됩니다.
+- **upcomings, lives**: 항상 `winner: undefined`로 반환됩니다.
+- **completes**: status가 Completed인 매치만 반환하며, 승리팀이 team1이면 `winner: "team1"`, team2면 `winner: "team2"`로 반환됩니다.
 - 승리팀 판별은 각 팀 영역의 부모 요소에 `<i class="js-spoiler fa fa-caret-right">` 아이콘이 있는지로 결정합니다.
 
 ### 예시 출력
 
 ```json
-[
-  {
-    "href": "/508815/boom-esports-vs-talon-vct-2025-pacific-stage-2-w1",
-    "match_id": "508815",
-    "team1": "Boom Esports",
-    "team2": "Talon",
-    "upcomingTime": "2h 30m",
-    "eventSeries": "Week 1: Group Stage",
-    "eventName": "VCT 2025 Pacific Stage 2",
-    "status": "Completed",
-    "winner": "team1"
-  },
-  {
-    "href": "/508816/nrg-vs-cloud9-vct-2025-pacific-stage-2-w1",
-    "match_id": "508816",
-    "team1": "NRG",
-    "team2": "Cloud9",
-    "upcomingTime": "1d 5h",
-    "eventSeries": "Week 1: Group Stage",
-    "eventName": "VCT 2025 Pacific Stage 2",
-    "status": "Upcoming",
-    "winner": null
-  }
-]
+{
+  "upcomings": [
+    {
+      "href": "/508816/nrg-vs-cloud9-vct-2025-pacific-stage-2-w1",
+      "match_id": "508816",
+      "team1": "NRG",
+      "team2": "Cloud9",
+      "upcomingTime": "1d 5h",
+      "eventSeries": "Week 1: Group Stage",
+      "eventName": "VCT 2025 Pacific Stage 2",
+      "status": "Upcoming",
+      "winner": null
+    }
+  ],
+  "lives": [
+    // ... live matches
+  ],
+  "completes": [
+    {
+      "href": "/508815/boom-esports-vs-talon-vct-2025-pacific-stage-2-w1",
+      "match_id": "508815",
+      "team1": "Boom Esports",
+      "team2": "Talon",
+      "upcomingTime": "2h 30m",
+      "eventSeries": "Week 1: Group Stage",
+      "eventName": "VCT 2025 Pacific Stage 2",
+      "status": "Completed",
+      "winner": "team1"
+    }
+  ]
+}
 ```
 
-## API 참조
+## 기존 함수와의 관계
 
-### `get_upcomings(event_id: number, event_name: string): Promise<MatchItem[]>`
-- status가 "Upcoming"인 매치만 반환
-- winner는 항상 undefined
-
-### `get_lives(event_id: number, event_name: string): Promise<MatchItem[]>`
-- status가 "LIVE"인 매치만 반환
-- winner는 항상 undefined
-
-### `get_completes(event_id: number, event_name: string): Promise<MatchItem[]>`
-- status가 "Completed"인 매치만 반환
-- winner: "team1" | "team2" (승리팀)
+- `get_upcomings(event_id, event_name)` → `get_allMatches(event_id, event_name).upcomings`
+- `get_lives(event_id, event_name)` → `get_allMatches(event_id, event_name).lives`
+- `get_completes(event_id, event_name)` → `get_allMatches(event_id, event_name).completes`
 
 ## 기술 스택
 - **TypeScript**: 타입 안전성 제공
@@ -141,6 +142,9 @@ npm run dev
 버그 리포트나 기능 제안은 이슈를 통해 제출해주세요. 풀 리퀘스트도 환영합니다.
 
 ## 변경 이력
+### v1.2.0
+- get_allMatches 함수가 모든 매치를 긁어오고 status별로 반환하도록 구조 변경
+- get_upcomings, get_lives, get_completes는 내부적으로 get_allMatches를 사용하도록 변경
 ### v1.1.0
 - get_upcomings, get_lives, get_completes 함수 분리 및 winner 필드 일관성 적용
 ### v1.0.0

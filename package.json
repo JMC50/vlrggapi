@@ -19,6 +19,7 @@
   "homepage": "https://github.com/JMC50/vlrggapi#readme",
   "description": "",
   "dependencies": {
+    "@supabase/supabase-js": "^2.50.3",
     "@types/express": "^5.0.3",
     "@types/puppeteer": "^5.4.7",
     "express": "^5.1.0",
