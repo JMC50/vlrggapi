@@ -4,6 +4,14 @@ import { get_upcomings, get_completes, get_lives, get_allMatches } from "./modul
 
 const app = express();
 
+process.on('uncaughtException', (err) => {
+	console.log(err);
+});
+
+process.on('unhandledRejection', (err) => {
+	console.log(err);
+});
+
 app.get("/get_allMatches", async (req, res) => {
     const event_id = Number(req.query.event_id);
     const event_name = decodeURIComponent(String(req.query.event_name));
