@@ -29,7 +29,9 @@ export async function get_allMatches(event_id: number, event_name: string): Prom
         const page = await browser.newPage();
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
         const url = `https://www.vlr.gg/event/matches/${event_id}/${event_name}/?series_id=all&group=all`;
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+        
+        // 타임아웃을 60초로 증가
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
         await autoScroll(page);
 
         const { upcomings, lives, completes } = await page.evaluate(() => {
@@ -139,6 +141,9 @@ export async function get_allMatches(event_id: number, event_name: string): Prom
             return { upcomings, lives, completes };
         });
         return { upcomings, lives, completes };
+    } catch (error) {
+        console.error(`Attempt failed:`, error);
+        throw new Error(`Failed to fetch matches.`);
     } finally {
         if (browser) {
             await browser.close();
@@ -172,8 +177,8 @@ async function autoScroll(page: Page): Promise<void> {
                 window.scrollBy(0, distance);
                 totalHeight += distance;
                 
-                // 스크롤이 끝에 도달했거나 충분히 스크롤했으면 중단
-                if(totalHeight >= scrollHeight || totalHeight > 10000){
+                // 스크롤이 끝에 도달했으면 중단
+                if(totalHeight >= scrollHeight){
                     clearInterval(timer);
                     resolve();
                 }
@@ -181,6 +186,9 @@ async function autoScroll(page: Page): Promise<void> {
         });
     });
     
-    // 스크롤 후 잠시 대기하여 동적 콘텐츠 로딩
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // 스크롤 후 잠시 대기하여 동적 콘텐츠 로딩 (기존 2초에서 3초로 증가)
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // 모든 매치 아이템이 로드될 때까지 기다립니다.
+    await page.waitForSelector('a.wf-module-item.match-item', { timeout: 10000 }).catch(() => console.log("Match items not fully loaded or timeout."));
 }
