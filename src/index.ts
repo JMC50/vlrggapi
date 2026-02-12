@@ -87,6 +87,7 @@ app.get("/get_completes", async (req, res) => {
 app.get("/get_players", async (req, res) => {
     const match_id = Number(req.query.match_id);
     const players = await get_players_in_match(match_id);
+    console.log(players)
     res.json(players);
 })
 

@@ -207,6 +207,7 @@ export async function get_players_in_match(match_id: number): Promise<string[]> 
         const players: string[] = [];
         const elements = document.querySelectorAll('.mod-player');
         elements.forEach(element => {
+            console.log(element);
             const name = element.childNodes[1].childNodes[0].textContent?.trim() || '';
             players.push(name);
         });
