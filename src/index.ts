@@ -1,6 +1,6 @@
 import { PORT } from "../config.json"
 import express from "express";
-import { get_upcomings, get_completes, get_lives, get_allMatches } from "./module/scrapper";
+import { get_upcomings, get_completes, get_lives, get_allMatches, get_players_in_match } from "./module/scrapper";
 
 const app = express();
 
@@ -82,6 +82,12 @@ app.get("/get_completes", async (req, res) => {
 
     const match = await get_completes(event_id, event_name);
     res.json(match);
+})
+
+app.get("/get_players", async (req, res) => {
+    const match_id = Number(req.query.match_id);
+    const players = await get_players_in_match(match_id);
+    res.json(players);
 })
 
 app.listen(PORT, () => {

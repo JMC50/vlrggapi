@@ -192,3 +192,25 @@ async function autoScroll(page: Page): Promise<void> {
     // 모든 매치 아이템이 로드될 때까지 기다립니다.
     await page.waitForSelector('a.wf-module-item.match-item', { timeout: 10000 }).catch(() => console.log("Match items not fully loaded or timeout."));
 }
+
+export async function get_players_in_match(match_id: number): Promise<string[]> {
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+    const url = `https://vlr.gg/${match_id}`;
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    await autoScroll(page);
+    const players = await page.evaluate(() => {
+        const players: string[] = [];
+        const elements = document.querySelectorAll('.mod-player');
+        elements.forEach(element => {
+            const name = element.childNodes[1].childNodes[0].textContent?.trim() || '';
+            players.push(name);
+        });
+        return players;
+    });
+    return players;
+}
