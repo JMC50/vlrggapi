@@ -195,24 +195,46 @@ async function autoScroll(page: Page): Promise<void> {
 
 export async function get_players_in_match(match_id: number): Promise<string[]> {
     const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        headless: true, // 최신 버전에서는 "new" 권장
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    const url = `https://vlr.gg/${match_id}`;
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-    await autoScroll(page);
-    const players = await page.evaluate(() => {
-        const filter = <Element>document.querySelector(".vm-stats-game");
-        const elements = filter.querySelectorAll("td.mod-player");
-        const players: string[] = [];
-        elements.forEach(element => {
-            const nameElement = <HTMLDivElement>element.querySelector(".text-of");
-            const name = nameElement.innerText? nameElement.innerText : "";
-            players.push(name);
+
+    try{
+        const page = await browser.newPage();
+        
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            if(['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
+                req.abort();
+            }else{
+                req.continue();
+            }
         });
+
+        const url = `https://vlr.gg/${match_id}`;
+        
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForSelector(".vm-stats-game", { timeout: 10000 });
+
+        const players = await page.evaluate(() => {
+            const elements = document.querySelectorAll(".vm-stats-game td.mod-player");
+            const playerList: string[] = [];
+            
+            elements.forEach(element => {
+                const nameElement = element.querySelector(".text-of") as HTMLElement;
+                if(nameElement){
+                    const name = nameElement.innerText.trim();
+                    if(name) playerList.push(name);
+                }
+            });
+            return Array.from(new Set(playerList));
+        });
+
         return players;
-    });
-    return players;
+    }catch(error){
+        console.error("Scraping error:", error);
+        return [];
+    }finally{
+        await browser.close();
+    }
 }
