@@ -204,11 +204,12 @@ export async function get_players_in_match(match_id: number): Promise<string[]> 
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
     await autoScroll(page);
     const players = await page.evaluate(() => {
+        const filter = <Element>document.querySelector(".vm-stats-game");
+        const elements = filter.querySelectorAll("td.mod-player");
         const players: string[] = [];
-        const elements = document.querySelectorAll('.mod-player');
         elements.forEach(element => {
-            console.log(element);
-            const name = element.childNodes[1].childNodes[0].textContent?.trim() || '';
+            const nameElement = <HTMLDivElement>element.querySelector(".text-of");
+            const name = nameElement.innerText? nameElement.innerText : "";
             players.push(name);
         });
         return players;
