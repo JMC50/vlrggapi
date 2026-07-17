@@ -56,7 +56,7 @@ export async function get_allMatches(event_id: number, event_name: string): Prom
                 return total;
             }
 
-            const eventName = document.querySelector(`h1.wf-title`)?.textContent?.trim() || '';
+            const eventName = document.querySelector(`h1.event-header-main-title`)?.textContent?.trim() || '';
             const elements = document.querySelectorAll('a.wf-module-item.match-item');
             const upcomings: MatchItem[] = [];
             const lives: MatchItem[] = [];
