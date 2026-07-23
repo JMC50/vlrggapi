@@ -104,9 +104,9 @@ export async function get_allMatches(event_id: number, event_name: string): Prom
                 if (status.toLowerCase() === 'completed') {
                     const team1Parent = teamElements[0]?.parentElement;
                     const team2Parent = teamElements[1]?.parentElement;
-                    if (team1Parent && team1Parent.querySelector('i.js-spoiler.fa.fa-caret-right')) {
+                    if (team1Parent && team1Parent.classList.contains('mod-winner')) {
                         winner = "team1";
-                    } else if (team2Parent && team2Parent.querySelector('i.js-spoiler.fa.fa-caret-right')) {
+                    } else if (team2Parent && team2Parent.classList.contains('mod-winner')) {
                         winner = "team2";
                     }
                 }
