@@ -13,7 +13,7 @@ process.on('unhandledRejection', (err) => {
 });
 
 app.get("/health", async (req, res) => {
-    res.json({ status: "ok" });
+    res.json({ ok: true });
 });
 
 app.get("/get_allMatches", async (req, res) => {
