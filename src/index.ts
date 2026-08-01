@@ -12,6 +12,10 @@ process.on('unhandledRejection', (err) => {
 	console.log(err);
 });
 
+app.get("/health", async (req, res) => {
+    res.json({ status: "ok" });
+});
+
 app.get("/get_allMatches", async (req, res) => {
     const event_id = Number(req.query.event_id);
     const event_name = decodeURIComponent(String(req.query.event_name));
