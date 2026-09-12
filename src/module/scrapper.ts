@@ -1,4 +1,5 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
+import * as cheerio from 'cheerio';
 
 export interface MatchItem {
     href: string;
@@ -237,4 +238,116 @@ export async function get_players_in_match(match_id: number): Promise<string[]> 
     }finally{
         await browser.close();
     }
+}
+
+// ─── valtico(발락티코)용 스크래핑 ───────────────────────────────────────────
+// 아래 함수들은 vlr.gg가 이 페이지들을 서버에서 정적으로 렌더링해주는 걸 확인해서
+// (실제 fetch로 검증함) puppeteer 없이 가벼운 fetch + cheerio로 처리한다.
+// puppeteer(크로미움 기동)보다 훨씬 빠르고, 매치 하나당 최대 20명씩 선수 개인 페이지를
+// 순회해야 하는 valtico 특성상 리소스 사용량 차이가 크다.
+
+const VLR_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
+async function fetchVlrHtml(url: string): Promise<string> {
+    const res = await fetch(url, { headers: { 'User-Agent': VLR_USER_AGENT } });
+    if(!res.ok){
+        throw new Error(`vlr.gg fetch 실패: ${url} (status ${res.status})`);
+    }
+    return res.text();
+}
+
+function parsePlayerHref(href: string | undefined): { player_id: number; slug: string } | null {
+    if(!href) return null;
+    const match = href.match(/^\/player\/(\d+)\/([^/?#]+)/);
+    if(!match) return null;
+    return { player_id: Number(match[1]), slug: match[2] };
+}
+
+export interface RosterPlayer {
+    player_id: number;
+    slug: string;
+    name: string;
+    team: string;
+}
+
+export interface PlayerMatchRating {
+    player_id: number;
+    rating: number;
+}
+
+/**
+ * 매치 페이지의 "All Maps" 탭(data-game-id="all")에서 양 팀 로스터를 가져온다.
+ * 맵 밴픽이 아직 "TBD"인 경기 시작 전 상태에서도 이 로스터는 채워져 있는 걸 확인함.
+ * (맵별 탭에도 같은 로스터가 중복으로 박혀있어서, "all" 탭 컨테이너로 반드시 범위를
+ *  좁혀야 함 — 안 그러면 맵 개수만큼 같은 선수가 중복으로 나옴)
+ */
+export async function get_match_roster(match_id: number): Promise<RosterPlayer[]> {
+    const html = await fetchVlrHtml(`https://vlr.gg/${match_id}?game=all`);
+    const $ = cheerio.load(html);
+
+    const allMapsContainer = $('.vm-stats-game[data-game-id="all"]');
+    const rows = allMapsContainer.length > 0 ? allMapsContainer.find('.ovw-row') : $('.ovw-row');
+
+    const players = new Map<number, RosterPlayer>();
+
+    rows.each((_, row) => {
+        const cell = $(row).find('.ovw-cell.mod-player');
+        const parsed = parsePlayerHref(cell.find('a[href^="/player/"]').first().attr('href'));
+        if(!parsed) return;
+
+        const name = cell.find('.ovw-player-name').first().text().trim();
+        const team = cell.find('.ovw-player-tag').first().text().trim();
+        if(!name) return;
+
+        players.set(parsed.player_id, { player_id: parsed.player_id, slug: parsed.slug, name, team });
+    });
+
+    return [...players.values()];
+}
+
+/**
+ * 매치의 "All Maps" 탭에서 선수별 전체 경기 rating(2.0, 양쪽 사이드 합산 값)을 가져온다.
+ * 경기가 끝나야 값이 채워지므로, 종료된 매치에만 의미있는 결과를 반환한다.
+ */
+export async function get_match_ratings(match_id: number): Promise<PlayerMatchRating[]> {
+    const html = await fetchVlrHtml(`https://vlr.gg/${match_id}?game=all`);
+    const $ = cheerio.load(html);
+
+    const allMapsContainer = $('.vm-stats-game[data-game-id="all"]');
+    const rows = allMapsContainer.length > 0 ? allMapsContainer.find('.ovw-row') : $('.ovw-row');
+
+    const ratings: PlayerMatchRating[] = [];
+
+    rows.each((_, row) => {
+        const parsed = parsePlayerHref($(row).find('.ovw-cell.mod-player a[href^="/player/"]').first().attr('href'));
+        if(!parsed) return;
+
+        const ratingText = $(row).find('.ovw-cell[data-col="rating2"] .side.mod-both').first().text().trim();
+        if(!ratingText) return;
+
+        const rating = Number(ratingText);
+        if(Number.isNaN(rating)) return;
+
+        ratings.push({ player_id: parsed.player_id, rating });
+    });
+
+    return ratings;
+}
+
+/**
+ * 선수가 최근(timespan) 기간 동안 실제로 플레이한 요원 목록(중복 제거)을 가져온다.
+ * valtico의 포지션 자격 판정에 씀 — 여기 나온 요원이 하나라도 특정 포지션 소속이면
+ * 그 포지션 자격이 있는 걸로 취급한다(agent → position 매핑은 이 함수 밖, 호출부 책임).
+ */
+export async function get_player_recent_agents(player_id: number, timespan: '30d' | '60d' | '90d' | 'all' = '90d'): Promise<string[]> {
+    const html = await fetchVlrHtml(`https://vlr.gg/player/${player_id}/?timespan=${timespan}`);
+    const $ = cheerio.load(html);
+
+    const agents = new Set<string>();
+    $('table.mod-agent-rows img[alt]').each((_, img) => {
+        const alt = $(img).attr('alt')?.trim().toLowerCase();
+        if(alt) agents.add(alt);
+    });
+
+    return [...agents];
 }
